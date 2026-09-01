@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dental caries detection — model info</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  main { max-width: 860px; }
+  .loading { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--structural); }
+
+  .info-section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 24px;
+    margin-bottom: 20px;
+  }
+  .info-section h2 { font-size: 15px; margin: 0 0 4px; }
+  .info-section .sub { font-size: 12.5px; color: var(--ink-soft); margin-bottom: 16px; }
+
+  .kv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; }
+  @media (max-width: 600px) { .kv-grid { grid-template-columns: 1fr; } }
+  .kv-grid .kv-label { font-family: 'IBM Plex Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); }
+  .kv-grid .kv-value { font-size: 14px; margin-top: 2px; }
+
+  .source-list { margin: 0; padding-left: 0; list-style: none; }
+  .source-list li { padding: 12px 0; border-top: 1px solid var(--border); }
+  .source-list li:first-child { border-top: none; padding-top: 0; }
+  .source-list .source-name { font-weight: 600; font-size: 14px; }
+  .source-list .source-note { font-size: 13px; color: var(--ink-soft); margin-top: 3px; }
+  .source-note.caution { color: var(--danger); }
+
+  .map-overall {
+    display: flex; align-items: baseline; gap: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    margin-bottom: 18px;
+  }
+  .map-overall .num { font-size: 32px; color: var(--accent); font-weight: 600; }
+  .map-overall .label { font-size: 12.5px; color: var(--ink-soft); }
+
+  .class-bars { display: flex; flex-direction: column; gap: 12px; }
+  .class-bar-row { display: grid; grid-template-columns: 110px 1fr 56px; align-items: center; gap: 10px; }
+  .class-bar-row .cname { font-size: 13.5px; }
+  .class-bar-track { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .class-bar-fill { height: 100%; border-radius: 4px; }
+  .class-bar-fill.high { background: #2FA8A0; }
+  .class-bar-fill.mid { background: #FBBF24; }
+  .class-bar-fill.low { background: #FF5C5C; }
+  .class-bar-row .cval { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; text-align: right; }
+
+  .limitations { margin: 0; padding-left: 0; list-style: none; }
+  .limitations li {
+    padding: 12px 14px;
+    background: var(--flag-soft, #FBF1EA);
+    border: 1px solid var(--flag-border, #E7C7AE);
+    border-radius: 8px;
+    font-size: 13.5px;
+    color: var(--ink);
+    margin-bottom: 10px;
+  }
+  .limitations li:last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">Research prototype</div>
+  <h1>Dental caries detection</h1>
+  <div class="disclaimer">
+    <span>⚠</span>
+    <span><strong>Not a medical device.</strong> Trained on public data for demonstration only. Every finding needs review by a licensed dentist and must not be used for real diagnosis or treatment decisions.</span>
+  </div>
+  <nav class="nav">
+    <a href="index.html">Single image</a>
+    <a href="batch.html">Batch upload</a>
+    <a href="compare.html">Ground truth comparison</a>
+    <a href="about.html" class="active">Model info</a>
+  </nav>
+</header>
+
+<main>
+  <div class="loading" id="loading">Loading model info…</div>
+  <div id="content" style="display:none">
+
+    <div class="info-section">
+      <h2>What's running</h2>
+      <div class="sub">The exact model currently serving predictions in this app</div>
+      <div class="kv-grid" id="model-kv"></div>
+    </div>
+
+    <div class="info-section">
+      <h2>Training data</h2>
+      <div class="sub">Three merged public sources — see CLAUDE.md for the full story of why</div>
+      <ul class="source-list" id="source-list"></ul>
+    </div>
+
+    <div class="info-section">
+      <h2>Accuracy (mAP50, IoU ≥ 0.5)</h2>
+      <div class="sub">Measured on held-out validation data at training time — not recomputed live</div>
+      <div class="map-overall">
+        <span class="num" id="map-overall-num"></span>
+        <span class="label">overall, all 3 classes</span>
+      </div>
+      <div class="class-bars" id="class-bars"></div>
+    </div>
+
+    <div class="info-section">
+      <h2>Known limitations</h2>
+      <div class="sub">Read this before presenting a result as more certain than it is</div>
+      <ul class="limitations" id="limitations-list"></ul>
+    </div>
+
+  </div>
+</main>
+
+<script>
+  function tierFor(value) {
+    if (value >= 0.75) return 'high';
+    if (value >= 0.5) return 'mid';
+    return 'low';
+  }
+
+  async function load() {
+    const loadingEl = document.getElementById('loading');
+    const contentEl = document.getElementById('content');
+    try {
+      const res = await fetch('/api/model-info');
+      if (!res.ok) throw new Error('Failed to load model info');
+      const info = await res.json();
+      loadingEl.style.display = 'none';
+      contentEl.style.display = 'block';
+
+      document.getElementById('model-kv').innerHTML = `
+        <div><div class="kv-label">Architecture</div><div class="kv-value">${info.architecture}</div></div>
+        <div><div class="kv-label">Input resolution</div><div class="kv-value">${info.image_size}px</div></div>
+        <div><div class="kv-label">Training images</div><div class="kv-value">${info.training_images.toLocaleString()}</div></div>
+        <div><div class="kv-label">Run name</div><div class="kv-value mono" style="font-size:12.5px;">${info.run_name}</div></div>
+      `;
+
+      document.getElementById('source-list').innerHTML = info.data_sources.map(s => `
+        <li>
+          <div class="source-name">${s.name}</div>
+          <div class="source-note${s.note.includes('no stated license') ? ' caution' : ''}">${s.note}</div>
+        </li>
+      `).join('');
+
+      document.getElementById('map-overall-num').textContent = info.overall_map50.toFixed(3);
+
+      document.getElementById('class-bars').innerHTML = Object.entries(info.per_class_map50).map(([cls, val]) => `
+        <div class="class-bar-row">
+          <span class="cname">${cls}</span>
+          <div class="class-bar-track"><div class="class-bar-fill ${tierFor(val)}" style="width:${val * 100}%"></div></div>
+          <span class="cval mono">${val.toFixed(3)}</span>
+        </div>
+      `).join('');
+
+      document.getElementById('limitations-list').innerHTML = info.limitations.map(l => `<li>${l}</li>`).join('');
+    } catch (err) {
+      loadingEl.textContent = 'Error: ' + err.message;
+    }
+  }
+
+  load();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,19 @@
+venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# trained weights and pretrained base checkpoints — large binaries, not source
+runs/
+*.pt
+
+# datasets — large, and CariesXrays specifically must not be redistributed
+# beyond this local demo (no stated license, real patient data — see CLAUDE.md)
+data/*
+!data/.gitkeep
+downloads/
+data_for_colab.zip
+demo_examples/
+
+# ephemeral logs from local runs
+*.log

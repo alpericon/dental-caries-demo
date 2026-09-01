@@ -1,0 +1,5 @@
+path: /content/data
+train: images/train
+val: images/val
+nc: 3
+names: ['Impacted', 'Caries', 'Deep Caries']

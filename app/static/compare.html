@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dental caries detection — ground truth comparison</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  .intro { font-size: 13.5px; color: var(--ink-soft); max-width: 70ch; margin: -6px 0 20px; }
+  .intro .swatch {
+    display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+    margin-right: 5px; position: relative; top: 1px;
+  }
+  .swatch.gt { background: var(--ground-truth); }
+  .swatch.pred { background: var(--accent); }
+
+  .loading { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--structural); }
+
+  /* overall summary banner */
+  .summary-banner {
+    display: none;
+    background: var(--panel-dark);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+    color: #EDF1F3;
+  }
+  .summary-banner .label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: #8A96A2;
+    margin-bottom: 14px;
+  }
+  .summary-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+  @media (max-width: 700px) { .summary-grid { grid-template-columns: 1fr 1fr; } }
+  .summary-grid .num { font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; font-size: 24px; }
+  .summary-grid .cap { font-size: 11.5px; color: #A9B3BC; margin-top: 4px; }
+  .num.matched { color: #4ADE80; }
+  .num.class_mismatch { color: #FBBF24; }
+  .num.missed { color: #FF5C5C; }
+  .num.extra { color: #FF8C5C; }
+
+  .example {
+    margin-bottom: 28px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .example-bar {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .example-bar .fname { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ink-soft); }
+  .example-bar .stats { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--ink-faint, var(--ink-soft)); }
+
+  .col-image {
+    background: var(--panel-dark);
+    display: flex; align-items: center; justify-content: center;
+    padding: 18px;
+    min-height: 260px;
+  }
+  .col-image img { max-width: 100%; max-height: 460px; border-radius: 4px; cursor: zoom-in; }
+
+  .chip-rows { padding: 14px 18px 16px; background: var(--card); }
+  .chip-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .chip-row:last-child { margin-bottom: 0; }
+  .chip-row .row-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ink-faint, var(--ink-soft));
+    width: 66px;
+    flex-shrink: 0;
+  }
+  .chip {
+    display: inline-block;
+    font-size: 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    padding: 3px 9px;
+    border-radius: 20px;
+    border: 1px solid transparent;
+  }
+  /* status colors shared by GT and prediction chips */
+  .chip.status-matched { background: #E4F9EC; color: #17803D; }
+  .chip.status-class_mismatch { background: #FEF6E0; color: #92650B; }
+  .chip.status-missed { background: #FBE9E9; color: #A23A3A; border-style: dashed; border-color: #E7B8B8; }
+  .chip.status-extra { background: #FFEDE4; color: #B8542E; border-style: dashed; border-color: #F0C4A8; }
+  .no-findings { font-size: 12.5px; color: var(--ink-soft); }
+
+  .by-class-table { margin-top: 18px; padding-top: 16px; border-top: 1px solid #2A343E; }
+  .by-class-table table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .by-class-table th { text-align: left; color: #8A96A2; font-weight: 400; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; padding: 0 10px 8px 0; }
+  .by-class-table td { padding: 4px 10px 4px 0; font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
+  .by-class-table td:first-child { font-family: 'Inter', sans-serif; color: #EDF1F3; }
+
+  .toolbar-row { display: flex; gap: 10px; margin-bottom: 20px; }
+  .print-btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--ink-soft);
+    cursor: pointer;
+  }
+  .print-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .print-btn:disabled { opacity: 0.5; cursor: default; }
+  #btn-reshuffle:hover { border-color: var(--structural); color: var(--structural); }
+
+  @media print {
+    .nav, .toolbar-row { display: none !important; }
+    .example { break-inside: avoid; }
+    .col-image { background: #fff !important; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">Research prototype</div>
+  <h1>Dental caries detection</h1>
+  <div class="disclaimer">
+    <span>⚠</span>
+    <span><strong>Not a medical device.</strong> Trained on public data for demonstration only. Every finding needs review by a licensed dentist and must not be used for real diagnosis or treatment decisions.</span>
+  </div>
+  <nav class="nav">
+    <a href="index.html">Single image</a>
+    <a href="batch.html">Batch upload</a>
+    <a href="compare.html" class="active">Ground truth comparison</a>
+    <a href="about.html">Model info</a>
+  </nav>
+</header>
+
+<main>
+  <p class="intro">
+    <span class="swatch gt"></span>Ground truth — labels from the training datasets (dentist-annotated).
+    &nbsp;&nbsp;
+    <span class="swatch pred"></span>Model prediction — this model's own output on the same, unmodified image,
+    drawn on top so mismatches are easy to spot.
+    <br>These are held-out images the model was <strong>not</strong> trained on, <strong>randomly sampled from
+    the full validation set on every reload</strong> — not a curated set picked to look good. A prediction
+    counts as a match when it overlaps a ground-truth box by IoU ≥ 0.5 — the same threshold behind this
+    project's mAP50 metric.
+  </p>
+
+  <div class="toolbar-row">
+    <button class="print-btn" onclick="window.print()">Print / save report</button>
+    <button class="print-btn" id="btn-reshuffle">Shuffle — new random sample</button>
+  </div>
+
+  <div class="summary-banner" id="summary-banner">
+    <div class="label" id="summary-label">Across these examples</div>
+    <div class="summary-grid" id="summary-grid"></div>
+    <div class="by-class-table">
+      <table>
+        <thead><tr><th>By class</th><th>Matched</th><th>Wrong class</th><th>Missed</th><th>Extra</th><th>Recall</th></tr></thead>
+        <tbody id="by-class-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="loading" id="loading">Loading examples and running the model…</div>
+  <div id="examples"></div>
+</main>
+
+<script src="boxes.js"></script>
+<script>
+  const STATUS_LABEL = {
+    matched: 'match',
+    class_mismatch: 'wrong class',
+    missed: 'missed',
+    extra: 'extra',
+  };
+
+  async function load() {
+    const loadingEl = document.getElementById('loading');
+    const examplesEl = document.getElementById('examples');
+    const reshuffleBtn = document.getElementById('btn-reshuffle');
+    examplesEl.innerHTML = '';
+    document.getElementById('summary-banner').style.display = 'none';
+    loadingEl.style.display = 'block';
+    loadingEl.textContent = 'Loading a new random sample and running the model…';
+    reshuffleBtn.disabled = true;
+    try {
+      const res = await fetch('/api/compare-examples');
+      if (!res.ok) throw new Error((await res.json()).detail || 'Failed to load examples');
+      const data = await res.json();
+      loadingEl.style.display = 'none';
+      reshuffleBtn.disabled = false;
+
+      renderOverallSummary(data.overall_summary);
+
+      for (const ex of data.examples) {
+        const card = document.createElement('div');
+        card.className = 'example';
+        const s = ex.summary;
+        card.innerHTML = `
+          <div class="example-bar">
+            <span class="fname mono">${ex.filename}</span>
+            <span class="stats mono">${s.matched}/${s.gt_total} matched${s.mean_iou !== null ? ` · avg IoU ${s.mean_iou.toFixed(2)}` : ''}${s.class_mismatch ? ` · ${s.class_mismatch} wrong class` : ''}${s.extra ? ` · ${s.extra} extra` : ''}</span>
+          </div>
+          <div class="col-image"><img></div>
+          <div class="chip-rows">
+            <div class="chip-row"><span class="row-label">Ground truth</span>${renderChips(ex.ground_truth_findings)}</div>
+            <div class="chip-row"><span class="row-label">Predicted</span>${renderChips(ex.predicted_findings)}</div>
+          </div>
+        `;
+        examplesEl.appendChild(card);
+
+        const sourceImg = await loadImage(ex.original_image);
+        const gtBoxes = ex.ground_truth_findings.map(f => ({
+          bbox_xyxy: f.bbox_xyxy,
+          color: '#FF5C5C',
+          label: `GT: ${f.class}`,
+        }));
+        const predBoxes = findingsToBoxes(ex.predicted_findings, 0);
+        card.querySelector('.col-image img').src = compositeBoxes(sourceImg, [...gtBoxes, ...predBoxes]);
+      }
+    } catch (err) {
+      loadingEl.textContent = 'Error: ' + err.message;
+      reshuffleBtn.disabled = false;
+    }
+  }
+
+  function renderOverallSummary(s) {
+    const banner = document.getElementById('summary-banner');
+    document.getElementById('summary-label').textContent = `Across this random sample of ${s.sample_size} held-out examples`;
+    const grid = document.getElementById('summary-grid');
+    const cells = [
+      { key: 'matched', num: s.matched, cap: `of ${s.gt_total} ground-truth findings matched` },
+      { key: 'class_mismatch', num: s.class_mismatch, cap: 'localized right, wrong class' },
+      { key: 'missed', num: s.missed, cap: 'ground-truth findings missed entirely' },
+      { key: 'extra', num: s.extra, cap: 'predictions with no matching label' },
+      { key: null, num: s.mean_iou !== null ? s.mean_iou.toFixed(2) : '—', cap: 'mean IoU of matched boxes' },
+    ];
+    grid.innerHTML = cells.map(c => `
+      <div>
+        <div class="num${c.key ? ' ' + c.key : ''}">${c.num}</div>
+        <div class="cap">${c.cap}</div>
+      </div>
+    `).join('');
+
+    const byClassBody = document.getElementById('by-class-body');
+    byClassBody.innerHTML = Object.entries(s.by_class).map(([cls, c]) => {
+      const recall = c.gt_total ? ((c.matched / c.gt_total) * 100).toFixed(0) + '%' : '—';
+      return `<tr><td>${cls}</td><td>${c.matched}/${c.gt_total}</td><td>${c.class_mismatch}</td><td>${c.missed}</td><td>${c.extra}</td><td>${recall}</td></tr>`;
+    }).join('');
+
+    banner.style.display = 'block';
+  }
+
+  function renderChips(findings) {
+    if (!findings.length) return '<span class="no-findings">None.</span>';
+    return findings.map(f => {
+      const conf = f.confidence !== undefined ? ` ${(f.confidence * 100).toFixed(0)}%` : '';
+      const status = f.match ? f.match.status : 'matched';
+      const iouText = f.match && f.match.iou > 0 ? ` · IoU ${f.match.iou.toFixed(2)}` : '';
+      const statusText = f.match ? ` (${STATUS_LABEL[status]})` : '';
+      return `<span class="chip status-${status}">${f.class}${classBadge(f.class)}${conf}${iouText}${statusText}</span>`;
+    }).join('');
+  }
+
+  document.getElementById('btn-reshuffle').addEventListener('click', load);
+  load();
+</script>
+
+<script src="zoom.js"></script>
+</body>
+</html>
