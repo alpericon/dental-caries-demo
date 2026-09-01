@@ -3,9 +3,19 @@ __pycache__/
 *.pyc
 .DS_Store
 
-# trained weights and pretrained base checkpoints — large binaries, not source
-runs/
+# trained weights and pretrained base checkpoints — large binaries, not source.
+# Exception: the current best model is pushed deliberately — see CLAUDE.md
+# for the reasoning (it's trained partly on CariesXrays, so this is a
+# conscious extension of that dataset's "local demo only" scope, not an
+# oversight).
+runs/*
+!runs/detect/
+runs/detect/*
+!runs/detect/dental_caries_demo_m_3class_hires_1280/
+runs/detect/dental_caries_demo_m_3class_hires_1280/*
+!runs/detect/dental_caries_demo_m_3class_hires_1280/weights/
 *.pt
+!runs/detect/dental_caries_demo_m_3class_hires_1280/weights/best.pt
 
 # datasets — large, and CariesXrays specifically must not be redistributed
 # beyond this local demo (no stated license, real patient data — see CLAUDE.md)

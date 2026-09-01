@@ -32,10 +32,15 @@ only public datasets. That combination matters for every decision below:
   One training source (CariesXrays, from an AAAI 2024 paper) has **no
   stated license at all** and is real hospital patient data — it was
   used anyway on an explicit, informed decision to accept that risk
-  for local prototyping only. Do not redistribute that data, or any
-  checkpoint trained on it, beyond this local demo. If this project
-  ever moves toward a real product, this needs to be resolved first
-  (contact the authors, or drop that data source and retrain).
+  for local prototyping only. Do not redistribute the raw CariesXrays
+  data itself. The "local demo only" scope for *checkpoints* trained on
+  it was later deliberately widened, on an explicit decision, to also
+  include the private GitHub repo this project pushes to (still not
+  public, still not commercial use) — see the repo's commit history
+  around when `best.pt` was added. If this project ever moves toward a
+  real product, the underlying CariesXrays licensing question still
+  needs to be resolved first (contact the authors, or drop that data
+  source and retrain) regardless of that widened scope.
 - Scope is deliberately narrow: 2D X-ray finding detection, framed as
   decision support (a dentist reviews every finding), not autonomous
   diagnosis. Dental MRI was explicitly ruled out for v1 — no standard
