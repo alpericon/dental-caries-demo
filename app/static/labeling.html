@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dental caries detection — labeling</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  .lede { font-size: 13.5px; color: var(--ink-soft); max-width: 70ch; margin: -6px 0 24px; }
+
+  /* --- project list --- */
+  .project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-bottom: 32px; }
+  .project-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; cursor: pointer; text-decoration: none; color: var(--ink); display: block;
+  }
+  .project-card:hover { border-color: var(--accent); }
+  .project-card .pname { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 15px; margin-bottom: 6px; }
+  .project-card .ptype {
+    display: inline-block; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px;
+    text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 8px; border-radius: 20px;
+    background: var(--accent-soft); color: #0E5A54; margin-bottom: 10px;
+  }
+  .project-card .pstats { font-size: 12.5px; color: var(--ink-soft); }
+  .project-card .pclasses { font-size: 12px; color: var(--ink-faint, var(--ink-soft)); margin-top: 6px; }
+
+  /* --- create form --- */
+  .create-panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px; max-width: 480px; }
+  .create-panel h2 { font-size: 15px; margin: 0 0 16px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); margin-bottom: 6px; }
+  .field input[type="text"] {
+    width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border);
+    font-family: 'Inter', sans-serif; font-size: 13.5px; box-sizing: border-box;
+  }
+  .type-toggle { display: flex; gap: 8px; }
+  .type-toggle button {
+    flex: 1; padding: 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-page);
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px; cursor: pointer; color: var(--ink-soft);
+  }
+  .type-toggle button.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+  .chip-input { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; }
+  .chip-input .chip {
+    display: inline-flex; align-items: center; gap: 5px; background: var(--structural-soft, #E4EAF0);
+    color: var(--structural); border-radius: 16px; padding: 3px 6px 3px 10px; font-size: 12.5px;
+  }
+  .chip-input .chip button { border: none; background: none; cursor: pointer; color: inherit; font-size: 13px; line-height: 1; padding: 0 2px; }
+  .chip-input input { border: none; outline: none; flex: 1; min-width: 100px; font-size: 13px; font-family: 'Inter', sans-serif; }
+
+  .btn-primary {
+    font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; padding: 9px 16px; border-radius: 6px;
+    border: none; background: var(--accent); color: #06231F; cursor: pointer; font-weight: 500;
+  }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-primary:disabled { opacity: 0.5; cursor: default; }
+
+  /* --- project detail --- */
+  .project-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; gap: 16px; flex-wrap: wrap; }
+  .project-header .back-link { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--structural); text-decoration: none; display: block; margin-bottom: 8px; }
+  .project-header h2 { margin: 0 0 6px; }
+  .project-header .meta { font-size: 12.5px; color: var(--ink-soft); }
+  .header-actions { display: flex; gap: 8px; }
+  .btn-secondary {
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 8px 14px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--card); color: var(--ink-soft); cursor: pointer; text-decoration: none; display: inline-block;
+  }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-danger:hover { border-color: var(--danger); color: var(--danger); }
+
+  .upload-dropzone {
+    text-align: center; color: var(--ink-soft); cursor: pointer; padding: 28px;
+    border: 1.5px dashed var(--border); border-radius: 10px; background: var(--card); margin-bottom: 24px;
+  }
+  .upload-dropzone:hover { border-color: var(--accent); color: var(--accent); }
+
+  .image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; }
+  .image-tile { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); text-decoration: none; display: block; background: var(--panel-dark); }
+  .image-tile img { width: 100%; height: 120px; object-fit: cover; display: block; }
+  .image-tile .badge {
+    position: absolute; top: 6px; right: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+    padding: 2px 7px; border-radius: 10px; text-transform: uppercase;
+  }
+  .badge.labeled { background: #E4F9EC; color: #17803D; }
+  .badge.unlabeled { background: #FBE9E9; color: #A23A3A; }
+  .image-tile .fname { font-size: 11px; color: #C4CDD5; padding: 6px 8px; font-family: 'IBM Plex Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .empty-state { font-size: 13px; color: var(--ink-soft); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">Research prototype</div>
+  <h1>Dental caries detection</h1>
+  <div class="disclaimer">
+    <span>⚠</span>
+    <span><strong>Not a medical device.</strong> Trained on public data for demonstration only. Every finding needs review by a licensed dentist and must not be used for real diagnosis or treatment decisions.</span>
+  </div>
+  <nav class="nav">
+    <a href="index.html">Single image</a>
+    <a href="batch.html">Batch upload</a>
+    <a href="compare.html">Ground truth comparison</a>
+    <a href="about.html">Model info</a>
+    <a href="labeling.html" class="active">Labeling</a>
+  </nav>
+</header>
+
+<main>
+  <div id="list-view">
+    <p class="lede">Create a labeling project, upload X-rays, and draw detection or segmentation labels.
+      Export the result as a YOLO-format zip ready to fold into <code>data/</code> for retraining.</p>
+
+    <div id="project-grid" class="project-grid"></div>
+
+    <div class="create-panel">
+      <h2>New project</h2>
+      <div class="field">
+        <label>Project name</label>
+        <input type="text" id="proj-name" placeholder="e.g. periapical lesion batch 1">
+      </div>
+      <div class="field">
+        <label>Label type</label>
+        <div class="type-toggle">
+          <button type="button" id="type-detection" class="active">Detection (boxes)</button>
+          <button type="button" id="type-segmentation">Segmentation (polygons)</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Classes</label>
+        <div class="chip-input" id="chip-input">
+          <input type="text" id="chip-text" placeholder="type a class, press Enter">
+        </div>
+      </div>
+      <button class="btn-primary" id="btn-create">Create project</button>
+    </div>
+  </div>
+
+  <div id="detail-view" style="display:none">
+    <div class="project-header">
+      <div>
+        <a href="labeling.html" class="back-link">← All projects</a>
+        <h2 id="detail-name"></h2>
+        <div class="meta" id="detail-meta"></div>
+      </div>
+      <div class="header-actions">
+        <a class="btn-secondary" id="btn-export" href="#">Export (.zip)</a>
+        <button class="btn-secondary btn-danger" id="btn-delete">Delete project</button>
+      </div>
+    </div>
+
+    <div class="upload-dropzone" id="dropzone">
+      <div class="display" style="font-family:'Space Grotesk',sans-serif; font-weight:600; color:var(--ink); margin-bottom:4px;">Drop X-rays here</div>
+      <small>or click to browse — select as many JPG/PNG files as you like</small>
+    </div>
+    <input type="file" id="file-input" accept="image/*" multiple style="display:none">
+
+    <div class="image-grid" id="image-grid"></div>
+  </div>
+</main>
+
+<script>
+  const params = new URLSearchParams(location.search);
+  const projectId = params.get('project');
+
+  if (projectId) {
+    document.getElementById('list-view').style.display = 'none';
+    document.getElementById('detail-view').style.display = 'block';
+    loadProjectDetail();
+  } else {
+    loadProjectList();
+  }
+
+  async function loadProjectList() {
+    const res = await fetch('/api/labeling/projects');
+    const data = await res.json();
+    const grid = document.getElementById('project-grid');
+    if (!data.projects.length) {
+      grid.innerHTML = '<div class="empty-state">No projects yet — create one below.</div>';
+      return;
+    }
+    grid.innerHTML = data.projects.map(p => `
+      <a class="project-card" href="labeling.html?project=${p.id}">
+        <div class="ptype">${p.type}</div>
+        <div class="pname">${p.name}</div>
+        <div class="pstats">${p.labeled_count}/${p.image_count} images labeled</div>
+        <div class="pclasses">${p.classes.join(', ')}</div>
+      </a>
+    `).join('');
+  }
+
+  // --- create form ---
+  let selectedType = 'detection';
+  document.getElementById('type-detection').addEventListener('click', () => setType('detection'));
+  document.getElementById('type-segmentation').addEventListener('click', () => setType('segmentation'));
+  function setType(t) {
+    selectedType = t;
+    document.getElementById('type-detection').classList.toggle('active', t === 'detection');
+    document.getElementById('type-segmentation').classList.toggle('active', t === 'segmentation');
+  }
+
+  let chips = ['Caries', 'Deep Caries', 'Impacted'];
+  const chipInput = document.getElementById('chip-input');
+  const chipText = document.getElementById('chip-text');
+  function renderChips() {
+    chipInput.querySelectorAll('.chip').forEach(el => el.remove());
+    chips.forEach((c, i) => {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.innerHTML = `${c} <button type="button" data-i="${i}">&times;</button>`;
+      chipInput.insertBefore(chip, chipText);
+    });
+  }
+  chipInput.addEventListener('click', (e) => {
+    if (e.target.tagName === 'BUTTON') {
+      chips.splice(Number(e.target.dataset.i), 1);
+      renderChips();
+    }
+  });
+  chipText.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && chipText.value.trim()) {
+      e.preventDefault();
+      chips.push(chipText.value.trim());
+      chipText.value = '';
+      renderChips();
+    }
+  });
+  renderChips();
+
+  document.getElementById('btn-create').addEventListener('click', async () => {
+    const name = document.getElementById('proj-name').value.trim();
+    if (!name) { alert('Give the project a name first.'); return; }
+    if (!chips.length) { alert('Add at least one class.'); return; }
+    const res = await fetch('/api/labeling/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, type: selectedType, classes: chips }),
+    });
+    if (!res.ok) { alert('Failed to create project.'); return; }
+    const data = await res.json();
+    location.href = `labeling.html?project=${data.id}`;
+  });
+
+  // --- project detail ---
+  let currentProject = null;
+
+  async function loadProjectDetail() {
+    const res = await fetch(`/api/labeling/projects/${projectId}`);
+    if (!res.ok) { document.getElementById('detail-name').textContent = 'Project not found.'; return; }
+    currentProject = await res.json();
+
+    document.getElementById('detail-name').textContent = currentProject.name;
+    document.getElementById('detail-meta').textContent =
+      `${currentProject.type} · classes: ${currentProject.classes.join(', ')}`;
+    document.getElementById('btn-export').href = `/api/labeling/projects/${projectId}/export`;
+
+    renderImageGrid();
+  }
+
+  function renderImageGrid() {
+    const grid = document.getElementById('image-grid');
+    if (!currentProject.images.length) {
+      grid.innerHTML = '<div class="empty-state">No images yet — drop some above.</div>';
+      return;
+    }
+    grid.innerHTML = currentProject.images.map(img => `
+      <a class="image-tile" href="annotate.html?project=${projectId}&image=${img.id}">
+        <span class="badge ${img.labeled ? 'labeled' : 'unlabeled'}">${img.labeled ? 'labeled' : 'unlabeled'}</span>
+        <img src="/api/labeling/projects/${projectId}/images/${img.id}" loading="lazy">
+        <div class="fname">${img.filename}</div>
+      </a>
+    `).join('');
+  }
+
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('file-input');
+  dropzone.addEventListener('click', () => fileInput.click());
+  dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.style.borderColor = '#2FA8A0'; });
+  dropzone.addEventListener('dragleave', () => { dropzone.style.borderColor = 'var(--border)'; });
+  dropzone.addEventListener('drop', (e) => { e.preventDefault(); if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files); });
+  fileInput.addEventListener('change', (e) => { if (e.target.files.length) uploadFiles(e.target.files); });
+
+  async function uploadFiles(fileList) {
+    const formData = new FormData();
+    for (const file of fileList) formData.append('files', file);
+    dropzone.querySelector('.display').textContent = 'Uploading…';
+    const res = await fetch(`/api/labeling/projects/${projectId}/images`, { method: 'POST', body: formData });
+    dropzone.querySelector('.display').textContent = 'Drop X-rays here';
+    if (!res.ok) { alert('Upload failed.'); return; }
+    await loadProjectDetail();
+  }
+
+  document.getElementById('btn-delete').addEventListener('click', async () => {
+    if (!confirm(`Delete project "${currentProject.name}" and all its images/labels? This can't be undone.`)) return;
+    await fetch(`/api/labeling/projects/${projectId}`, { method: 'DELETE' });
+    location.href = 'labeling.html';
+  });
+</script>
+
+</body>
+</html>

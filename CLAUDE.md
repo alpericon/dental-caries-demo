@@ -85,14 +85,42 @@ scripts/tiled_inference.py   — SAHI-style tiled inference experiment.
                                resize) and made results worse, not better.
                                Would need tile-aware retraining to pay off.
                                Not used by the app.
-app/main.py                  — FastAPI backend, single /predict endpoint.
-                               Points at the current best model. Verified
-                               end-to-end via a real browser session
-                               (Playwright), not just curl/TestClient.
-app/static/index.html        — demo UI. Dark radiology-viewer-styled panel,
-                               original/AI-annotated toggle, findings sidebar
-                               with confidence bars, persistent "not a
-                               medical device" disclaimer in the header.
+app/main.py                  — FastAPI backend: /predict, /predict-batch,
+                               /api/compare-examples (random 10-image
+                               sample each call, IoU-matched against
+                               ground truth), /api/model-info. Points at
+                               the current best model. Verified end-to-end
+                               via real browser sessions (Playwright), not
+                               just curl/TestClient.
+app/labeling.py               — separate router (mounted at /api/labeling)
+                               for the data labeling tool — see below.
+app/static/index.html,        — demo UI: single-image upload, batch
+  batch.html, compare.html,     upload, ground-truth comparison (with
+  about.html                    per-class IoU stats), and a Model Info
+                               page surfacing the same limitations listed
+                               here (so the honesty lives in the app, not
+                               just in this file). Dark radiology-viewer
+                               styling, confidence-threshold sliders,
+                               click-to-zoom on every image, persistent
+                               "not a medical device" disclaimer.
+app/static/labeling.html,     — the data labeling tool: create a project
+  annotate.html, annotator.js   (detection or segmentation, user-defined
+                               classes), upload images, label on a canvas
+                               (annotator.js — hand-rolled, no external
+                               annotation library), export a YOLO-format
+                               zip. Filesystem-based storage under
+                               labeling_projects/ (gitignored — it's
+                               user-generated data), mirroring the same
+                               images/+labels/ convention data/ uses.
+                               Built to close the exact gap CLAUDE.md
+                               flags below: no way to create new labeled
+                               data (e.g. periapical lesion examples, or
+                               segmentation masks for the classes DENTEX
+                               already has polygons for — see "Immediate
+                               next steps").
+app/static/style.css, boxes.js, zoom.js — shared styling and client-side
+                               box-drawing/zoom-viewer JS used across all
+                               of the above pages.
 colab_train.ipynb            — Colab fallback for training on a different
                                GPU. Turned out not to beat the local RTX
                                3070 Ti for this workload once its CPU
@@ -126,7 +154,11 @@ from the 2026-08-28 session if picking this back up).
    confusion-matrix findings above. Don't oversell the numbers.
 4. After the demo: use it to open a real conversation with a dentist
    about becoming an advisor (Phase 3 depends on this) — and about
-   getting real periapical-lesion-labeled data if they're willing.
+   getting real periapical-lesion-labeled data if they're willing. The
+   labeling tool (`app/static/labeling.html`) is now built for exactly
+   this — a dentist partner could label directly in the browser, no
+   separate tooling needed, and export a YOLO-format zip to merge into
+   `data/` the same way the other sources were.
 
 ## Conventions to keep
 

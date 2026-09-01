@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dental caries detection — annotate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  main { max-width: 1400px; }
+  .workspace { display: grid; grid-template-columns: 1fr 300px; gap: 20px; }
+  @media (max-width: 900px) { .workspace { grid-template-columns: 1fr; } }
+
+  .toolbar {
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+    margin-bottom: 14px;
+  }
+  .toolbar .left { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+  .toolbar .back-link { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--structural); text-decoration: none; }
+  .toolbar .progress { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ink-soft); }
+  .toolbar .right { display: flex; gap: 8px; align-items: center; }
+
+  .nav-btn, .btn-save {
+    font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; padding: 8px 14px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--card); color: var(--ink-soft); cursor: pointer;
+  }
+  .nav-btn:hover { border-color: var(--structural); color: var(--structural); }
+  .nav-btn:disabled { opacity: 0.4; cursor: default; }
+  .btn-save { background: var(--accent); color: #06231F; border: none; font-weight: 500; }
+  .btn-save:hover { opacity: 0.9; }
+  .btn-save.dirty::after { content: " •"; }
+
+  .canvas-panel { background: var(--panel-dark); border-radius: 12px; padding: 16px; display: flex; align-items: flex-start; justify-content: center; min-height: 400px; }
+
+  .side-panel { display: flex; flex-direction: column; gap: 16px; }
+  .side-section { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .side-section h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); margin: 0 0 12px; font-family: 'IBM Plex Mono', monospace; font-weight: 500; }
+
+  .class-btn {
+    display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+    padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-page);
+    font-size: 13px; cursor: pointer; margin-bottom: 6px; color: var(--ink);
+  }
+  .class-btn:last-child { margin-bottom: 0; }
+  .class-btn .swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+  .class-btn.active { border-color: var(--ink); font-weight: 600; }
+
+  .shape-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-top: 1px solid var(--border); font-size: 12.5px; }
+  .shape-row:first-child { border-top: none; }
+  .shape-row .sname { display: flex; align-items: center; gap: 7px; cursor: pointer; }
+  .shape-row .swatch { width: 10px; height: 10px; border-radius: 2px; }
+  .shape-row button { border: none; background: none; color: var(--danger); cursor: pointer; font-size: 15px; line-height: 1; }
+
+  .hint { font-size: 12px; color: var(--ink-soft); line-height: 1.5; }
+  .empty-state { font-size: 12.5px; color: var(--ink-soft); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">Research prototype</div>
+  <h1>Dental caries detection</h1>
+  <div class="disclaimer">
+    <span>⚠</span>
+    <span><strong>Not a medical device.</strong> Trained on public data for demonstration only. Every finding needs review by a licensed dentist and must not be used for real diagnosis or treatment decisions.</span>
+  </div>
+  <nav class="nav">
+    <a href="index.html">Single image</a>
+    <a href="batch.html">Batch upload</a>
+    <a href="compare.html">Ground truth comparison</a>
+    <a href="about.html">Model info</a>
+    <a href="labeling.html" class="active">Labeling</a>
+  </nav>
+</header>
+
+<main>
+  <div class="toolbar">
+    <div class="left">
+      <a class="back-link" id="back-link" href="labeling.html">← Back to gallery</a>
+      <span class="progress" id="progress"></span>
+    </div>
+    <div class="right">
+      <button class="nav-btn" id="btn-prev">← Prev</button>
+      <button class="nav-btn" id="btn-next">Next →</button>
+      <button class="btn-save" id="btn-save">Save</button>
+    </div>
+  </div>
+
+  <div class="workspace">
+    <div class="canvas-panel" id="canvas-container"></div>
+
+    <div class="side-panel">
+      <div class="side-section">
+        <h3>Class (click to set active)</h3>
+        <div id="class-list"></div>
+      </div>
+
+      <div class="side-section">
+        <h3 id="mode-hint-title">How to label</h3>
+        <div class="hint" id="mode-hint"></div>
+      </div>
+
+      <div class="side-section">
+        <h3>Shapes on this image</h3>
+        <div id="shape-list"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="annotator.js"></script>
+<script>
+  const params = new URLSearchParams(location.search);
+  const projectId = params.get('project');
+  let imageId = params.get('image');
+
+  document.getElementById('back-link').href = `labeling.html?project=${projectId}`;
+
+  let project = null;
+  let annotator = null;
+  let dirty = false;
+  let activeClassIndex = 0;
+
+  async function init() {
+    const res = await fetch(`/api/labeling/projects/${projectId}`);
+    project = await res.json();
+
+    document.getElementById('mode-hint-title').textContent =
+      project.type === 'detection' ? 'How to label (boxes)' : 'How to label (polygons)';
+    document.getElementById('mode-hint').textContent =
+      project.type === 'detection'
+        ? 'Drag on the image to draw a box. Click a box to select it, then press Delete/Backspace to remove it.'
+        : 'Click to place vertices. Click near the first point (or press Enter) to close the shape. Escape cancels. Drag a vertex to adjust it after closing.';
+
+    renderClassList();
+    await loadImage(imageId);
+  }
+
+  function renderClassList() {
+    const el = document.getElementById('class-list');
+    el.innerHTML = project.classes.map((c, i) => `
+      <button class="class-btn ${i === activeClassIndex ? 'active' : ''}" data-i="${i}">
+        <span class="swatch" style="background:${annotatorColor(i)}"></span>${c}
+      </button>
+    `).join('');
+    el.querySelectorAll('.class-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        activeClassIndex = Number(btn.dataset.i);
+        if (annotator) annotator.setActiveClass(activeClassIndex);
+        renderClassList();
+      });
+    });
+  }
+
+  async function loadImage(id) {
+    imageId = id;
+    const idx = project.images.findIndex(img => img.id === id);
+    document.getElementById('progress').textContent =
+      `Image ${idx + 1} of ${project.images.length} — ${project.images.filter(i => i.labeled).length} labeled`;
+    document.getElementById('btn-prev').disabled = idx <= 0;
+    document.getElementById('btn-next').disabled = idx >= project.images.length - 1;
+
+    const labelsRes = await fetch(`/api/labeling/projects/${projectId}/images/${id}/labels`);
+    const { shapes } = await labelsRes.json();
+
+    const container = document.getElementById('canvas-container');
+    if (annotator) annotator.destroy();
+    annotator = createAnnotator({
+      container,
+      imageUrl: `/api/labeling/projects/${projectId}/images/${id}`,
+      mode: project.type,
+      classes: project.classes,
+      initialShapes: shapes,
+      onChange: () => { dirty = true; updateSaveButton(); renderShapeList(); },
+    });
+    annotator.setActiveClass(activeClassIndex);
+    await annotator.ready;
+    dirty = false;
+    updateSaveButton();
+    renderShapeList();
+  }
+
+  function updateSaveButton() {
+    document.getElementById('btn-save').classList.toggle('dirty', dirty);
+  }
+
+  function renderShapeList() {
+    const el = document.getElementById('shape-list');
+    const shapes = annotator.getShapes();
+    if (!shapes.length) {
+      el.innerHTML = '<div class="empty-state">No shapes yet.</div>';
+      return;
+    }
+    el.innerHTML = shapes.map((s, i) => `
+      <div class="shape-row">
+        <span class="sname" data-i="${i}"><span class="swatch" style="background:${annotatorColor(s.class_id)}"></span>${project.classes[s.class_id] || '?'}</span>
+        <button data-del="${i}" title="Delete">&times;</button>
+      </div>
+    `).join('');
+    el.querySelectorAll('[data-i]').forEach(el2 => el2.addEventListener('click', () => annotator.selectAt(Number(el2.dataset.i))));
+    el.querySelectorAll('[data-del]').forEach(el2 => el2.addEventListener('click', (e) => {
+      e.stopPropagation();
+      annotator.deleteAt(Number(el2.dataset.del));
+    }));
+  }
+
+  async function save() {
+    const shapes = annotator.getShapes();
+    const res = await fetch(`/api/labeling/projects/${projectId}/images/${imageId}/labels`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shapes }),
+    });
+    if (!res.ok) { alert('Failed to save labels.'); return false; }
+    dirty = false;
+    updateSaveButton();
+    const img = project.images.find(i => i.id === imageId);
+    if (img) img.labeled = shapes.length > 0;
+    return true;
+  }
+
+  document.getElementById('btn-save').addEventListener('click', save);
+
+  async function navigate(delta) {
+    if (dirty) await save();
+    const idx = project.images.findIndex(img => img.id === imageId);
+    const next = project.images[idx + delta];
+    if (next) {
+      history.replaceState(null, '', `annotate.html?project=${projectId}&image=${next.id}`);
+      await loadImage(next.id);
+    }
+  }
+  document.getElementById('btn-prev').addEventListener('click', () => navigate(-1));
+  document.getElementById('btn-next').addEventListener('click', () => navigate(1));
+
+  window.addEventListener('beforeunload', (e) => {
+    if (dirty) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  init();
+</script>
+
+</body>
+</html>

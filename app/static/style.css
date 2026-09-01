@@ -11,6 +11,8 @@
   --card: #FFFFFF;
   --danger: #B8542E;
   --ground-truth: #D64545;
+  --structural-soft: #E4EAF0;
+  --ink-faint: #7C8894;
 }
 * { box-sizing: border-box; }
 body {

@@ -8,6 +8,10 @@ Loads the model trained by train.py and exposes:
                           each call, with both the ground-truth labels and
                           the model's predictions, for an accuracy comparison
 
+Also mounts app/labeling.py's router at /api/labeling — the data
+labeling tool (create a project, upload images, draw detection or
+segmentation labels, export in YOLO format).
+
 Findings are returned down to a low confidence floor (see
 MIN_CONFIDENCE below) rather than a single fixed cutoff, so the frontend
 can offer a live confidence-threshold slider without re-calling the model
@@ -24,6 +28,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from ultralytics import YOLO
+
+from app.labeling import router as labeling_router
 
 WEIGHTS_PATH = Path("runs/detect/dental_caries_demo_m_3class_hires_1280/weights/best.pt")
 # A low floor, not the display default — lets the UI's confidence slider
@@ -115,6 +121,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(labeling_router, prefix="/api/labeling")
 
 model = None
 

@@ -27,3 +27,7 @@ demo_examples/
 
 # ephemeral logs from local runs
 *.log
+
+# user-created labeling projects (images + labels people upload via the
+# labeling tool) — this is user data, not project source
+labeling_projects/
