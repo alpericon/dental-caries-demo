@@ -31,7 +31,29 @@
   .btn-save:hover { opacity: 0.9; }
   .btn-save.dirty::after { content: " •"; }
 
-  .canvas-panel { background: var(--panel-dark); border-radius: 12px; padding: 16px; display: flex; align-items: flex-start; justify-content: center; min-height: 400px; }
+  .canvas-panel {
+    background: var(--panel-dark); border-radius: 12px; padding: 16px;
+    height: 74vh; min-height: 420px; position: relative; overflow: hidden;
+  }
+  #canvas-container { width: 100%; height: 100%; }
+  #canvas-container canvas:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+  .zoom-controls {
+    position: absolute; bottom: 14px; right: 14px;
+    display: flex; align-items: center; gap: 4px;
+    background: rgba(18, 24, 31, 0.9); border: 1px solid var(--panel-dark-line);
+    border-radius: 8px; padding: 5px;
+  }
+  .zoom-controls button {
+    width: 26px; height: 26px; border-radius: 5px; border: none; background: #1C242C;
+    color: #C4CDD5; cursor: pointer; font-size: 15px; line-height: 1;
+  }
+  .zoom-controls button:hover { color: var(--accent); }
+  .zoom-controls .zoom-pct {
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #8A96A2;
+    width: 40px; text-align: center; cursor: pointer;
+  }
+  .zoom-controls .zoom-pct:hover { color: var(--accent); }
 
   .side-panel { display: flex; flex-direction: column; gap: 16px; }
   .side-section { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
@@ -88,7 +110,14 @@
   </div>
 
   <div class="workspace">
-    <div class="canvas-panel" id="canvas-container"></div>
+    <div class="canvas-panel">
+      <div id="canvas-container"></div>
+      <div class="zoom-controls">
+        <button id="btn-zoom-out" title="Zoom out">&minus;</button>
+        <span class="zoom-pct" id="zoom-pct" title="Reset zoom">100%</span>
+        <button id="btn-zoom-in" title="Zoom in">+</button>
+      </div>
+    </div>
 
     <div class="side-panel">
       <div class="side-section">
@@ -129,9 +158,10 @@
     document.getElementById('mode-hint-title').textContent =
       project.type === 'detection' ? 'How to label (boxes)' : 'How to label (polygons)';
     document.getElementById('mode-hint').textContent =
-      project.type === 'detection'
+      (project.type === 'detection'
         ? 'Drag on the image to draw a box. Click a box to select it, then press Delete/Backspace to remove it.'
-        : 'Click to place vertices. Click near the first point (or press Enter) to close the shape. Escape cancels. Drag a vertex to adjust it after closing.';
+        : 'Click to place vertices. Click near the first point (or press Enter) to close the shape. Escape cancels. Drag a vertex to adjust it after closing.'
+      ) + ' Scroll to zoom, hold Space and drag to pan.';
 
     renderClassList();
     await loadImage(imageId);
@@ -173,12 +203,14 @@
       classes: project.classes,
       initialShapes: shapes,
       onChange: () => { dirty = true; updateSaveButton(); renderShapeList(); },
+      onZoomChange: (pct) => { document.getElementById('zoom-pct').textContent = pct + '%'; },
     });
     annotator.setActiveClass(activeClassIndex);
     await annotator.ready;
     dirty = false;
     updateSaveButton();
     renderShapeList();
+    document.getElementById('zoom-pct').textContent = annotator.getZoomPercent() + '%';
   }
 
   function updateSaveButton() {
@@ -233,6 +265,10 @@
   }
   document.getElementById('btn-prev').addEventListener('click', () => navigate(-1));
   document.getElementById('btn-next').addEventListener('click', () => navigate(1));
+
+  document.getElementById('btn-zoom-in').addEventListener('click', () => annotator && annotator.zoomIn());
+  document.getElementById('btn-zoom-out').addEventListener('click', () => annotator && annotator.zoomOut());
+  document.getElementById('zoom-pct').addEventListener('click', () => annotator && annotator.resetZoom());
 
   window.addEventListener('beforeunload', (e) => {
     if (dirty) { e.preventDefault(); e.returnValue = ''; }

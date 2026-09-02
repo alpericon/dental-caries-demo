@@ -13,6 +13,11 @@
 // Shapes: {class_id, points}
 //   detection:    points = [x1, y1, x2, y2]
 //   segmentation: points = [x1, y1, x2, y2, ..., xn, yn]  (flat, >=3 pts)
+//
+// The canvas is a fixed-size viewport (matches the container, doesn't
+// resize with zoom) — scroll to zoom toward the cursor, hold Space and
+// drag to pan. Same interaction convention as the app's zoom.js viewer,
+// so it should feel familiar.
 
 const ANNOTATOR_PALETTE = [
   "#4C8DFF", "#2FE0D0", "#FFB020", "#FF5C5C",
@@ -24,18 +29,22 @@ function annotatorColor(classId) {
 }
 
 const CLOSE_VERTEX_RADIUS_PX = 10; // screen-space radius for "click near start to close"
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 12;
 
-function createAnnotator({ container, imageUrl, mode, classes, initialShapes, onChange }) {
+function createAnnotator({ container, imageUrl, mode, classes, initialShapes, onChange, onZoomChange }) {
   const canvas = document.createElement("canvas");
   canvas.style.display = "block";
   canvas.style.cursor = "crosshair";
-  canvas.style.maxWidth = "100%";
   container.innerHTML = "";
   container.appendChild(canvas);
   const ctx = canvas.getContext("2d");
 
   let img = null;
-  let scale = 1;
+  let baseScale = 1; // fit-to-viewport scale at zoom=1
+  let zoom = 1;
+  let panX = 0;
+  let panY = 0;
   let shapes = (initialShapes || []).map((s) => ({ ...s, points: [...s.points] }));
   let activeClass = 0;
   let selectedIndex = -1;
@@ -43,20 +52,33 @@ function createAnnotator({ container, imageUrl, mode, classes, initialShapes, on
   let polygonInProgress = null; // [ [x,y], ... ] in image-pixel space, while drawing a polygon
   let cursorImagePoint = null; // [x,y], for the live preview line in segmentation mode
   let draggingVertex = null; // {shapeIndex, pointIndex}, for adjusting a polygon vertex
+  let spaceHeld = false;
+  let isPanning = false;
+  let panStartScreen = null;
+  let panStartOffset = null;
+
+  function scale() {
+    return baseScale * zoom;
+  }
 
   function emitChange() {
     if (onChange) onChange(getShapes());
   }
 
+  function sizeCanvasToContainer() {
+    canvas.width = container.clientWidth;
+    canvas.height = container.clientHeight || Math.round(container.clientWidth * 0.6);
+  }
+
   function toImagePoint(evt) {
     const rect = canvas.getBoundingClientRect();
-    const sx = ((evt.clientX - rect.left) * canvas.width) / rect.width;
-    const sy = ((evt.clientY - rect.top) * canvas.height) / rect.height;
-    return [sx / scale, sy / scale];
+    const sx = (evt.clientX - rect.left) * (canvas.width / rect.width);
+    const sy = (evt.clientY - rect.top) * (canvas.height / rect.height);
+    return [(sx - panX) / scale(), (sy - panY) / scale()];
   }
 
   function toScreen(x, y) {
-    return [x * scale, y * scale];
+    return [x * scale() + panX, y * scale() + panY];
   }
 
   function distance(a, b) {
@@ -118,10 +140,9 @@ function createAnnotator({ container, imageUrl, mode, classes, initialShapes, on
 
   function redraw() {
     if (!img) return;
-    canvas.width = img.naturalWidth * scale;
-    canvas.height = img.naturalHeight * scale;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const [ix, iy] = toScreen(0, 0);
+    ctx.drawImage(img, ix, iy, img.naturalWidth * scale(), img.naturalHeight * scale());
 
     shapes.forEach((s, i) => {
       const color = annotatorColor(s.class_id);
@@ -224,7 +245,45 @@ function createAnnotator({ container, imageUrl, mode, classes, initialShapes, on
     cursorImagePoint = null;
   }
 
+  function setZoom(newZoom, screenPivot) {
+    const prevScale = scale();
+    zoom = Math.min(Math.max(newZoom, MIN_ZOOM), MAX_ZOOM);
+    const newScale = scale();
+    const [px, py] = screenPivot || [canvas.width / 2, canvas.height / 2];
+    panX = px - (px - panX) * (newScale / prevScale);
+    panY = py - (py - panY) * (newScale / prevScale);
+    clampPan();
+    redraw();
+    if (onZoomChange) onZoomChange(Math.round(zoom * 100));
+  }
+
+  function clampPan() {
+    // keep at least a small sliver of the image on screen at all times
+    const w = img.naturalWidth * scale();
+    const h = img.naturalHeight * scale();
+    const margin = 60;
+    panX = Math.min(Math.max(panX, -w + margin), canvas.width - margin);
+    panY = Math.min(Math.max(panY, -h + margin), canvas.height - margin);
+  }
+
+  function onWheel(evt) {
+    evt.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const px = (evt.clientX - rect.left) * (canvas.width / rect.width);
+    const py = (evt.clientY - rect.top) * (canvas.height / rect.height);
+    const factor = evt.deltaY < 0 ? 1.2 : 1 / 1.2;
+    setZoom(zoom * factor, [px, py]);
+  }
+
   function onMouseDown(evt) {
+    if (spaceHeld || evt.button === 1) {
+      isPanning = true;
+      panStartScreen = [evt.clientX, evt.clientY];
+      panStartOffset = [panX, panY];
+      canvas.style.cursor = "grabbing";
+      return;
+    }
+
     const pt = toImagePoint(evt);
 
     if (mode === "segmentation") {
@@ -269,6 +328,13 @@ function createAnnotator({ container, imageUrl, mode, classes, initialShapes, on
   }
 
   function onMouseMove(evt) {
+    if (isPanning) {
+      panX = panStartOffset[0] + (evt.clientX - panStartScreen[0]);
+      panY = panStartOffset[1] + (evt.clientY - panStartScreen[1]);
+      redraw();
+      return;
+    }
+
     const pt = toImagePoint(evt);
     if (draggingVertex) {
       shapes[draggingVertex.shapeIndex].points[draggingVertex.pointIndex * 2] = pt[0];
@@ -289,6 +355,13 @@ function createAnnotator({ container, imageUrl, mode, classes, initialShapes, on
   }
 
   function onMouseUp() {
+    if (isPanning) {
+      isPanning = false;
+      clampPan();
+      canvas.style.cursor = spaceHeld ? "grab" : "crosshair";
+      redraw();
+      return;
+    }
     if (draggingVertex) {
       draggingVertex = null;
       emitChange();
@@ -301,7 +374,11 @@ function createAnnotator({ container, imageUrl, mode, classes, initialShapes, on
   }
 
   function onKeyDown(evt) {
-    if (evt.key === "Escape") {
+    if (evt.key === " " && !spaceHeld) {
+      spaceHeld = true;
+      canvas.style.cursor = "grab";
+      evt.preventDefault();
+    } else if (evt.key === "Escape") {
       polygonInProgress = null;
       cursorImagePoint = null;
       redraw();
@@ -318,17 +395,29 @@ function createAnnotator({ container, imageUrl, mode, classes, initialShapes, on
     }
   }
 
+  function onKeyUp(evt) {
+    if (evt.key === " ") {
+      spaceHeld = false;
+      canvas.style.cursor = "crosshair";
+    }
+  }
+
+  function onResize() {
+    sizeCanvasToContainer();
+    if (img) {
+      baseScale = Math.min(canvas.width / img.naturalWidth, canvas.height / img.naturalHeight, 1);
+      redraw();
+    }
+  }
+
   canvas.tabIndex = 0; // so it can receive keydown
   canvas.addEventListener("mousedown", onMouseDown);
   canvas.addEventListener("mousemove", onMouseMove);
+  canvas.addEventListener("wheel", onWheel, { passive: false });
   window.addEventListener("mouseup", onMouseUp);
   canvas.addEventListener("keydown", onKeyDown);
-  window.addEventListener("resize", () => {
-    if (img) {
-      scale = Math.min(1, container.clientWidth / img.naturalWidth);
-      redraw();
-    }
-  });
+  canvas.addEventListener("keyup", onKeyUp);
+  window.addEventListener("resize", onResize);
 
   function loadImage(url, newShapes) {
     return new Promise((resolve) => {
@@ -339,7 +428,12 @@ function createAnnotator({ container, imageUrl, mode, classes, initialShapes, on
         selectedIndex = -1;
         polygonInProgress = null;
         dragBox = null;
-        scale = Math.min(1, container.clientWidth / img.naturalWidth);
+        sizeCanvasToContainer();
+        baseScale = Math.min(canvas.width / img.naturalWidth, canvas.height / img.naturalHeight, 1);
+        zoom = 1;
+        // center the fitted image in the viewport
+        panX = (canvas.width - img.naturalWidth * baseScale) / 2;
+        panY = (canvas.height - img.naturalHeight * baseScale) / 2;
         redraw();
         resolve();
       };
@@ -353,6 +447,7 @@ function createAnnotator({ container, imageUrl, mode, classes, initialShapes, on
 
   function destroy() {
     window.removeEventListener("mouseup", onMouseUp);
+    window.removeEventListener("resize", onResize);
     container.innerHTML = "";
   }
 
@@ -381,6 +476,18 @@ function createAnnotator({ container, imageUrl, mode, classes, initialShapes, on
       selectedIndex = index;
       redraw();
     },
+    zoomIn() { setZoom(zoom * 1.4); },
+    zoomOut() { setZoom(zoom / 1.4); },
+    resetZoom() {
+      zoom = 1;
+      if (img) {
+        panX = (canvas.width - img.naturalWidth * baseScale) / 2;
+        panY = (canvas.height - img.naturalHeight * baseScale) / 2;
+      }
+      redraw();
+      if (onZoomChange) onZoomChange(100);
+    },
+    getZoomPercent() { return Math.round(zoom * 100); },
     getShapes,
     loadImage,
     destroy,
