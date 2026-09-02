@@ -56,9 +56,25 @@ function createAnnotator({ container, imageUrl, mode, classes, initialShapes, on
   let isPanning = false;
   let panStartScreen = null;
   let panStartOffset = null;
+  let undoStack = [];
+  const UNDO_LIMIT = 50;
 
   function scale() {
     return baseScale * zoom;
+  }
+
+  function pushUndo() {
+    undoStack.push(JSON.parse(JSON.stringify(shapes)));
+    if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+  }
+
+  function undo() {
+    if (!undoStack.length) return false;
+    shapes = undoStack.pop();
+    selectedIndex = -1;
+    redraw();
+    emitChange();
+    return true;
   }
 
   function emitChange() {
@@ -221,6 +237,7 @@ function createAnnotator({ container, imageUrl, mode, classes, initialShapes, on
       const w = Math.abs(dragBox.x2 - dragBox.x1);
       const h = Math.abs(dragBox.y2 - dragBox.y1);
       if (w > 4 && h > 4) {
+        pushUndo();
         shapes.push({
           class_id: activeClass,
           points: [
@@ -238,6 +255,7 @@ function createAnnotator({ container, imageUrl, mode, classes, initialShapes, on
 
   function closePolygon() {
     if (polygonInProgress && polygonInProgress.length >= 3) {
+      pushUndo();
       shapes.push({ class_id: activeClass, points: polygonInProgress.flat() });
       emitChange();
     }
@@ -289,6 +307,7 @@ function createAnnotator({ container, imageUrl, mode, classes, initialShapes, on
     if (mode === "segmentation") {
       const vhit = vertexHitTest(pt);
       if (vhit && !polygonInProgress) {
+        pushUndo();
         draggingVertex = vhit;
         return;
       }
@@ -387,12 +406,18 @@ function createAnnotator({ container, imageUrl, mode, classes, initialShapes, on
       redraw();
     } else if (evt.key === "Delete" || evt.key === "Backspace") {
       if (selectedIndex >= 0 && document.activeElement === canvas) {
+        pushUndo();
         shapes.splice(selectedIndex, 1);
         selectedIndex = -1;
         emitChange();
         redraw();
       }
     }
+    // Ctrl+Z is intentionally NOT handled here: this listener only fires
+    // while the canvas itself has focus, which is lost the moment the
+    // user clicks a sidebar button (delete/class/etc). Undo needs to work
+    // regardless of focus, so it's wired at the page level instead — see
+    // annotate.html's window keydown listener, calling annotator.undo().
   }
 
   function onKeyUp(evt) {
@@ -428,6 +453,7 @@ function createAnnotator({ container, imageUrl, mode, classes, initialShapes, on
         selectedIndex = -1;
         polygonInProgress = null;
         dragBox = null;
+        undoStack = []; // don't let undo cross image boundaries
         sizeCanvasToContainer();
         baseScale = Math.min(canvas.width / img.naturalWidth, canvas.height / img.naturalHeight, 1);
         zoom = 1;
@@ -460,6 +486,7 @@ function createAnnotator({ container, imageUrl, mode, classes, initialShapes, on
     },
     deleteSelected() {
       if (selectedIndex >= 0) {
+        pushUndo();
         shapes.splice(selectedIndex, 1);
         selectedIndex = -1;
         emitChange();
@@ -467,11 +494,13 @@ function createAnnotator({ container, imageUrl, mode, classes, initialShapes, on
       }
     },
     deleteAt(index) {
+      pushUndo();
       shapes.splice(index, 1);
       if (selectedIndex === index) selectedIndex = -1;
       emitChange();
       redraw();
     },
+    undo,
     selectAt(index) {
       selectedIndex = index;
       redraw();

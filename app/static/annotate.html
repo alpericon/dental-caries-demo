@@ -67,6 +67,11 @@
   .class-btn:last-child { margin-bottom: 0; }
   .class-btn .swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
   .class-btn.active { border-color: var(--ink); font-weight: 600; }
+  .class-btn .key-hint {
+    margin-left: auto; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px;
+    color: var(--ink-faint, var(--ink-soft)); background: var(--bg-page);
+    border-radius: 3px; padding: 1px 5px;
+  }
 
   .shape-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-top: 1px solid var(--border); font-size: 12.5px; }
   .shape-row:first-child { border-top: none; }
@@ -103,8 +108,10 @@
       <span class="progress" id="progress"></span>
     </div>
     <div class="right">
+      <button class="nav-btn" id="btn-undo" title="Undo (Ctrl+Z)">Undo</button>
       <button class="nav-btn" id="btn-prev">← Prev</button>
       <button class="nav-btn" id="btn-next">Next →</button>
+      <button class="nav-btn" id="btn-next-unlabeled">Next unlabeled →</button>
       <button class="btn-save" id="btn-save">Save</button>
     </div>
   </div>
@@ -161,10 +168,17 @@
       (project.type === 'detection'
         ? 'Drag on the image to draw a box. Click a box to select it, then press Delete/Backspace to remove it.'
         : 'Click to place vertices. Click near the first point (or press Enter) to close the shape. Escape cancels. Drag a vertex to adjust it after closing.'
-      ) + ' Scroll to zoom, hold Space and drag to pan.';
+      ) + ' Scroll to zoom, hold Space and drag to pan. Press 1-9 to pick a class, Ctrl+Z to undo.';
 
     renderClassList();
     await loadImage(imageId);
+  }
+
+  function setActiveClassIndex(i) {
+    if (i < 0 || i >= project.classes.length) return;
+    activeClassIndex = i;
+    if (annotator) annotator.setActiveClass(activeClassIndex);
+    renderClassList();
   }
 
   function renderClassList() {
@@ -172,14 +186,11 @@
     el.innerHTML = project.classes.map((c, i) => `
       <button class="class-btn ${i === activeClassIndex ? 'active' : ''}" data-i="${i}">
         <span class="swatch" style="background:${annotatorColor(i)}"></span>${c}
+        <span class="key-hint">${i < 9 ? i + 1 : ''}</span>
       </button>
     `).join('');
     el.querySelectorAll('.class-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        activeClassIndex = Number(btn.dataset.i);
-        if (annotator) annotator.setActiveClass(activeClassIndex);
-        renderClassList();
-      });
+      btn.addEventListener('click', () => setActiveClassIndex(Number(btn.dataset.i)));
     });
   }
 
@@ -254,21 +265,47 @@
 
   document.getElementById('btn-save').addEventListener('click', save);
 
-  async function navigate(delta) {
+  async function goToImage(image) {
+    if (!image) return;
     if (dirty) await save();
+    history.replaceState(null, '', `annotate.html?project=${projectId}&image=${image.id}`);
+    await loadImage(image.id);
+  }
+
+  async function navigate(delta) {
     const idx = project.images.findIndex(img => img.id === imageId);
-    const next = project.images[idx + delta];
-    if (next) {
-      history.replaceState(null, '', `annotate.html?project=${projectId}&image=${next.id}`);
-      await loadImage(next.id);
-    }
+    await goToImage(project.images[idx + delta]);
   }
   document.getElementById('btn-prev').addEventListener('click', () => navigate(-1));
   document.getElementById('btn-next').addEventListener('click', () => navigate(1));
 
+  async function nextUnlabeled() {
+    const idx = project.images.findIndex(img => img.id === imageId);
+    const n = project.images.length;
+    for (let step = 1; step <= n; step++) {
+      const candidate = project.images[(idx + step) % n];
+      if (!candidate.labeled) { await goToImage(candidate); return; }
+    }
+    alert('Every image in this project is labeled.');
+  }
+  document.getElementById('btn-next-unlabeled').addEventListener('click', nextUnlabeled);
+
+  document.getElementById('btn-undo').addEventListener('click', () => annotator && annotator.undo());
+
   document.getElementById('btn-zoom-in').addEventListener('click', () => annotator && annotator.zoomIn());
   document.getElementById('btn-zoom-out').addEventListener('click', () => annotator && annotator.zoomOut());
   document.getElementById('zoom-pct').addEventListener('click', () => annotator && annotator.resetZoom());
+
+  window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      if (annotator) annotator.undo();
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const n = Number(e.key);
+    if (Number.isInteger(n) && n >= 1 && n <= 9) setActiveClassIndex(n - 1);
+  });
 
   window.addEventListener('beforeunload', (e) => {
     if (dirty) { e.preventDefault(); e.returnValue = ''; }
