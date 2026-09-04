@@ -131,7 +131,7 @@
   .card-tools button:hover { color: var(--accent); }
 
   @media print {
-    .batch-dropzone, .threshold-bar, .queue-status, .card-toggle, .card-tools, .nav { display: none !important; }
+    .batch-dropzone, .threshold-bar, .queue-status, .card-toggle, .card-tools, .nav, .model-bar { display: none !important; }
     .results-grid { display: block; }
     .result-card { break-inside: avoid; margin-bottom: 24px; border-color: #ccc !important; }
     .card-image, .card-bar { background: #fff !important; }
@@ -158,6 +158,14 @@
 </header>
 
 <main>
+  <div class="model-bar" id="model-bar" style="display:flex; align-items:center; gap:12px; margin-bottom: 16px;">
+    <span class="mono" style="font-size:12px; color:var(--ink-soft);">MODEL</span>
+    <div class="toggle model-toggle light-toggle" id="model-toggle">
+      <button id="btn-model-detect" class="active">Detection</button>
+      <button id="btn-model-seg">Segmentation</button>
+    </div>
+  </div>
+
   <div class="batch-dropzone" id="dropzone">
     <div class="display">Drop multiple X-rays here</div>
     <small>or click to browse — select as many JPG/PNG files as you like</small>
@@ -165,10 +173,6 @@
   <input type="file" id="file-input" accept="image/*" multiple style="display:none">
 
   <div class="threshold-bar" id="threshold-bar">
-    <div class="toggle model-toggle light-toggle" id="model-toggle">
-      <button id="btn-model-detect" class="active">Detection</button>
-      <button id="btn-model-seg">Segmentation</button>
-    </div>
     <span>MIN CONFIDENCE (all images)</span>
     <input type="range" id="threshold-slider" min="5" max="95" value="25" step="1">
     <span class="threshold-value" id="threshold-value">25%</span>
