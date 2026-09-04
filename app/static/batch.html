@@ -302,8 +302,12 @@
   }
 
   let cardRefreshers = [];
+  // Guards against an in-flight handleFiles() (e.g. a rapid model-toggle
+  // click) still resolving after a newer call has already cleared the grid.
+  let batchGeneration = 0;
 
   async function handleFiles(fileList) {
+    const myGeneration = ++batchGeneration;
     const files = Array.from(fileList);
     currentFiles = files;
     resultsGrid.innerHTML = '';
@@ -311,6 +315,11 @@
     thresholdBar.style.display = 'none';
     queueStatus.style.display = 'block';
     queueStatus.textContent = `Uploading ${files.length} image${files.length === 1 ? '' : 's'}…`;
+    // Disabled for the duration of this run — prevents queuing up multiple
+    // full batch-inference runs server-side if the model toggle (or a new
+    // upload) is triggered again before this one finishes.
+    btnModelDetect.disabled = true;
+    btnModelSeg.disabled = true;
 
     const cards = new Map();
     const originalUrls = new Map();
@@ -334,6 +343,7 @@
       ]);
       if (!res.ok) throw new Error((await res.json()).detail || 'Batch prediction failed');
       const data = await res.json();
+      if (myGeneration !== batchGeneration) return; // a newer handleFiles() started meanwhile
       const imageByFilename = new Map(urlEntries.map(([filename], i) => [filename, loadedImgs[i]]));
 
       for (const result of data.results) {
@@ -354,8 +364,13 @@
 
       thresholdBar.style.display = 'flex';
       queueStatus.textContent = `Done — ${data.results.length} image${data.results.length === 1 ? '' : 's'} processed.`;
+      btnModelDetect.disabled = false;
+      btnModelSeg.disabled = false;
     } catch (err) {
+      if (myGeneration !== batchGeneration) return;
       queueStatus.textContent = 'Error: ' + err.message;
+      btnModelDetect.disabled = false;
+      btnModelSeg.disabled = false;
     }
   }
 

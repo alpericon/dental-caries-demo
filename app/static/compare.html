@@ -187,26 +187,39 @@
   };
 
   let currentModel = 'detection';
+  // Guards against overlapping load() calls (e.g. the model toggle clicked
+  // again before the previous run's sequential image loads finish) — without
+  // this, both runs' async card-appends interleave into the same #examples,
+  // mixing detection and segmentation results together.
+  let loadGeneration = 0;
 
   async function load() {
+    const myGeneration = ++loadGeneration;
     const loadingEl = document.getElementById('loading');
     const examplesEl = document.getElementById('examples');
     const reshuffleBtn = document.getElementById('btn-reshuffle');
+    const modelToggleButtons = document.querySelectorAll('#model-toggle button');
     examplesEl.innerHTML = '';
     document.getElementById('summary-banner').style.display = 'none';
     loadingEl.style.display = 'block';
     loadingEl.textContent = 'Loading a new random sample and running the model…';
     reshuffleBtn.disabled = true;
+    // Disabled for the duration of this load, not just until the next click —
+    // prevents queuing up multiple full inference runs server-side when a
+    // model toggle is clicked again before this one finishes.
+    modelToggleButtons.forEach(b => b.disabled = true);
     try {
       const res = await fetch('/api/compare-examples?model=' + currentModel);
       if (!res.ok) throw new Error((await res.json()).detail || 'Failed to load examples');
       const data = await res.json();
+      if (myGeneration !== loadGeneration) return; // a newer load() started meanwhile
       loadingEl.style.display = 'none';
       reshuffleBtn.disabled = false;
 
       renderOverallSummary(data.overall_summary);
 
       for (const ex of data.examples) {
+        if (myGeneration !== loadGeneration) return;
         const card = document.createElement('div');
         card.className = 'example';
         const s = ex.summary;
@@ -224,6 +237,7 @@
         examplesEl.appendChild(card);
 
         const sourceImg = await loadImage(ex.original_image);
+        if (myGeneration !== loadGeneration) return;
         const gtBoxes = ex.ground_truth_findings.map(f => ({
           bbox_xyxy: f.bbox_xyxy,
           polygon: f.polygon,
@@ -233,9 +247,12 @@
         const predBoxes = findingsToBoxes(ex.predicted_findings, 0);
         card.querySelector('.col-image img').src = compositeBoxes(sourceImg, [...gtBoxes, ...predBoxes]);
       }
+      modelToggleButtons.forEach(b => b.disabled = false);
     } catch (err) {
+      if (myGeneration !== loadGeneration) return;
       loadingEl.textContent = 'Error: ' + err.message;
       reshuffleBtn.disabled = false;
+      modelToggleButtons.forEach(b => b.disabled = false);
     }
   }
 
