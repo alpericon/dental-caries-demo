@@ -154,6 +154,10 @@
   </p>
 
   <div class="toolbar-row">
+    <div class="toggle model-toggle light-toggle" id="model-toggle">
+      <button id="btn-model-detect" class="active">Detection</button>
+      <button id="btn-model-seg">Segmentation</button>
+    </div>
     <button class="print-btn" onclick="window.print()">Print / save report</button>
     <button class="print-btn" id="btn-reshuffle">Shuffle — new random sample</button>
   </div>
@@ -182,6 +186,8 @@
     extra: 'extra',
   };
 
+  let currentModel = 'detection';
+
   async function load() {
     const loadingEl = document.getElementById('loading');
     const examplesEl = document.getElementById('examples');
@@ -192,7 +198,7 @@
     loadingEl.textContent = 'Loading a new random sample and running the model…';
     reshuffleBtn.disabled = true;
     try {
-      const res = await fetch('/api/compare-examples');
+      const res = await fetch('/api/compare-examples?model=' + currentModel);
       if (!res.ok) throw new Error((await res.json()).detail || 'Failed to load examples');
       const data = await res.json();
       loadingEl.style.display = 'none';
@@ -220,6 +226,7 @@
         const sourceImg = await loadImage(ex.original_image);
         const gtBoxes = ex.ground_truth_findings.map(f => ({
           bbox_xyxy: f.bbox_xyxy,
+          polygon: f.polygon,
           color: '#FF5C5C',
           label: `GT: ${f.class}`,
         }));
@@ -271,6 +278,18 @@
   }
 
   document.getElementById('btn-reshuffle').addEventListener('click', load);
+
+  const btnModelDetect = document.getElementById('btn-model-detect');
+  const btnModelSeg = document.getElementById('btn-model-seg');
+  function setActiveModel(modelType) {
+    currentModel = modelType;
+    btnModelDetect.classList.toggle('active', modelType === 'detection');
+    btnModelSeg.classList.toggle('active', modelType === 'segmentation');
+    load();
+  }
+  btnModelDetect.addEventListener('click', () => setActiveModel('detection'));
+  btnModelSeg.addEventListener('click', () => setActiveModel('segmentation'));
+
   load();
 </script>
 

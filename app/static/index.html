@@ -82,10 +82,16 @@
   <section class="viewer">
     <div class="viewer-bar">
       <span id="viewer-label">NO IMAGE LOADED</span>
-      <div class="toggle">
-        <button id="btn-original" class="active" disabled>Original</button>
-        <button id="btn-annotated" disabled>AI annotated</button>
-        <button id="btn-side" disabled>Side by side</button>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <div class="toggle model-toggle" id="model-toggle">
+          <button id="btn-model-detect" class="active">Detection</button>
+          <button id="btn-model-seg">Segmentation</button>
+        </div>
+        <div class="toggle">
+          <button id="btn-original" class="active" disabled>Original</button>
+          <button id="btn-annotated" disabled>AI annotated</button>
+          <button id="btn-side" disabled>Side by side</button>
+        </div>
       </div>
     </div>
     <div class="viewer-stage" id="stage">
@@ -133,9 +139,13 @@
   const actionsRow = document.getElementById('actions-row');
   const btnDownload = document.getElementById('btn-download');
   const btnPrint = document.getElementById('btn-print');
+  const btnModelDetect = document.getElementById('btn-model-detect');
+  const btnModelSeg = document.getElementById('btn-model-seg');
 
   let originalUrl = null;
   let originalFilename = 'xray';
+  let currentFile = null;   // kept so switching models can re-POST without a re-upload
+  let currentModel = 'detection';
   let loadedImage = null;   // Image object, for client-side compositing
   let allFindings = [];     // full findings list from the API (low confidence floor)
   let currentAnnotatedUrl = null;
@@ -187,6 +197,7 @@
   }
 
   async function handleFile(file) {
+    currentFile = file;
     originalUrl = URL.createObjectURL(file);
     originalFilename = file.name.replace(/\.[^.]+$/, '');
     allFindings = [];
@@ -199,21 +210,26 @@
     thresholdRow.style.display = 'none';
     actionsRow.style.display = 'none';
     setActiveToggle('original');
+
+    const img = await loadImage(originalUrl);
+    loadedImage = img;
+    await runPrediction();
+  }
+
+  async function runPrediction() {
+    if (!currentFile) return;
     setStatus('Analyzing…', true);
     findingsEl.innerHTML = '<div class="empty-state">Running detection…</div>';
 
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', currentFile);
+    formData.append('model', currentModel);
 
     try {
-      const [res, img] = await Promise.all([
-        fetch('/predict', { method: 'POST', body: formData }),
-        loadImage(originalUrl),
-      ]);
+      const res = await fetch('/predict', { method: 'POST', body: formData });
       if (!res.ok) throw new Error((await res.json()).detail || 'Prediction failed');
       const data = await res.json();
 
-      loadedImage = img;
       allFindings = data.findings;
       btnAnnotated.disabled = false;
       btnSide.disabled = false;
@@ -229,6 +245,16 @@
       findingsEl.innerHTML = '<div class="empty-state">Something went wrong. Try a different image.</div>';
     }
   }
+
+  function setActiveModel(modelType) {
+    currentModel = modelType;
+    btnModelDetect.classList.toggle('active', modelType === 'detection');
+    btnModelSeg.classList.toggle('active', modelType === 'segmentation');
+    runPrediction();
+  }
+
+  btnModelDetect.addEventListener('click', () => setActiveModel('detection'));
+  btnModelSeg.addEventListener('click', () => setActiveModel('segmentation'));
 
   function setActiveToggle(which) {
     btnOriginal.classList.toggle('active', which === 'original');

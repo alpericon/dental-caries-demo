@@ -44,11 +44,24 @@ function compositeBoxes(sourceImg, boxes) {
   const fontSize = Math.round(15 * scale);
   const padY = Math.round(6 * scale);
 
-  boxes.forEach(({ bbox_xyxy, color, label }) => {
-    const [x1, y1, x2, y2] = bbox_xyxy;
+  boxes.forEach(({ bbox_xyxy, polygon, color, label }) => {
+    const [x1, y1] = bbox_xyxy;
     ctx.lineWidth = lineWidth;
     ctx.strokeStyle = color;
-    ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+
+    if (polygon && polygon.length >= 3) {
+      // segmentation mask: translucent fill + solid outline
+      ctx.beginPath();
+      ctx.moveTo(polygon[0][0], polygon[0][1]);
+      for (let i = 1; i < polygon.length; i++) ctx.lineTo(polygon[i][0], polygon[i][1]);
+      ctx.closePath();
+      ctx.fillStyle = color + "40"; // ~25% alpha
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      const [, , x2, y2] = bbox_xyxy;
+      ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+    }
 
     ctx.font = `600 ${fontSize}px 'IBM Plex Mono', monospace`;
     const textWidth = ctx.measureText(label).width;
@@ -67,6 +80,7 @@ function findingsToBoxes(findings, threshold) {
     .filter((f) => f.confidence === undefined || f.confidence >= threshold)
     .map((f) => ({
       bbox_xyxy: f.bbox_xyxy,
+      polygon: f.polygon,
       color: CLASS_COLORS[f.class] || "#FFFFFF",
       label: f.confidence !== undefined ? `${f.class} ${(f.confidence * 100).toFixed(0)}%` : f.class,
     }));

@@ -83,6 +83,11 @@
 </header>
 
 <main>
+  <div class="toggle model-toggle light-toggle" id="model-toggle" style="margin-bottom: 20px;">
+    <button id="btn-model-detect" class="active">Detection</button>
+    <button id="btn-model-seg">Segmentation</button>
+  </div>
+
   <div class="loading" id="loading">Loading model info…</div>
   <div id="content" style="display:none">
 
@@ -124,11 +129,15 @@
     return 'low';
   }
 
+  let currentModel = 'detection';
+
   async function load() {
     const loadingEl = document.getElementById('loading');
     const contentEl = document.getElementById('content');
+    loadingEl.style.display = 'block';
+    contentEl.style.display = 'none';
     try {
-      const res = await fetch('/api/model-info');
+      const res = await fetch('/api/model-info/' + currentModel);
       if (!res.ok) throw new Error('Failed to load model info');
       const info = await res.json();
       loadingEl.style.display = 'none';
@@ -149,6 +158,9 @@
       `).join('');
 
       document.getElementById('map-overall-num').textContent = info.overall_map50.toFixed(3);
+      document.querySelector('.map-overall .label').textContent = info.overall_box_map50 !== undefined
+        ? `overall mask mAP50, all 3 classes (box mAP50 ${info.overall_box_map50.toFixed(3)})`
+        : 'overall, all 3 classes';
 
       document.getElementById('class-bars').innerHTML = Object.entries(info.per_class_map50).map(([cls, val]) => `
         <div class="class-bar-row">
@@ -163,6 +175,17 @@
       loadingEl.textContent = 'Error: ' + err.message;
     }
   }
+
+  const btnModelDetect = document.getElementById('btn-model-detect');
+  const btnModelSeg = document.getElementById('btn-model-seg');
+  function setActiveModel(modelType) {
+    currentModel = modelType;
+    btnModelDetect.classList.toggle('active', modelType === 'detection');
+    btnModelSeg.classList.toggle('active', modelType === 'segmentation');
+    load();
+  }
+  btnModelDetect.addEventListener('click', () => setActiveModel('detection'));
+  btnModelSeg.addEventListener('click', () => setActiveModel('segmentation'));
 
   load();
 </script>

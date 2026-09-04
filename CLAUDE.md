@@ -94,16 +94,23 @@ scripts/prepare_dentex_segmentation.py — converts DENTEX's polygon
                                match data/data.yaml.
 train_seg.py                  — YOLOv8m-seg fine-tuning script, mirrors
                                train.py. Expects data_seg/data.yaml.
-                               Not integrated into the demo app yet —
-                               training pipeline only, by design (see
-                               "Segmentation model" below).
-app/main.py                  — FastAPI backend: /predict, /predict-batch,
+app/main.py                  — FastAPI backend: loads both the detection
+                               and segmentation models at startup.
+                               /predict, /predict-batch,
                                /api/compare-examples (random 10-image
                                sample each call, IoU-matched against
-                               ground truth), /api/model-info. Points at
-                               the current best model. Verified end-to-end
-                               via real browser sessions (Playwright), not
-                               just curl/TestClient.
+                               ground truth) and /api/model-info/{type}
+                               all take a model ("detection" or
+                               "segmentation") selecting which. Segmentation
+                               findings carry a pixel-space mask polygon
+                               alongside the usual bbox; ground-truth
+                               matching still uses bbox IoU even for
+                               segmentation (the polygon's own bounding
+                               box) — full polygon/mask IoU was judged not
+                               worth the complexity for a demo app.
+                               Verified end-to-end via real browser
+                               sessions (Playwright), not just
+                               curl/TestClient.
 app/labeling.py               — separate router (mounted at /api/labeling)
                                for the data labeling tool — see below.
 app/static/index.html,        — demo UI: single-image upload, batch
@@ -114,7 +121,12 @@ app/static/index.html,        — demo UI: single-image upload, batch
                                just in this file). Dark radiology-viewer
                                styling, confidence-threshold sliders,
                                click-to-zoom on every image, persistent
-                               "not a medical device" disclaimer.
+                               "not a medical device" disclaimer. All four
+                               pages carry a Detection/Segmentation model
+                               toggle — switching re-runs prediction (or,
+                               on compare/model-info, loads that model's
+                               own separate data/metrics) rather than
+                               blending both into one view.
 app/static/labeling.html,     — the data labeling tool: create a project
   annotate.html, annotator.js   (detection or segmentation, user-defined
                                classes), upload images, label on a canvas
@@ -177,9 +189,10 @@ Caries scored lower (583 vs. 616), most likely because 103 val
 instances is thin even for an easier class. Read this as a supporting
 signal, not a validated result — the dataset is small.
 
-**Deliberately not done yet:** wiring this model into the demo app
-(mask overlays in `app/main.py`/the UI). This was scoped as a training
-pipeline only; app integration is a clear, separate follow-up.
+**Integrated into the demo app**: every page (single image, batch,
+ground-truth comparison, model info) has a Detection/Segmentation toggle
+— see `app/main.py`'s entry above for how prediction/comparison/info
+requests carry the model selection.
 
 ## Immediate next steps
 

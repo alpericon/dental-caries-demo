@@ -124,6 +124,15 @@ main {
 .toggle button.active { background: var(--accent); color: #06231F; }
 .toggle button:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* model switch (detection/segmentation) — distinct color from the
+   original/annotated/side view toggle so the two aren't confused.
+   .toggle supplies the shared shape; this only recolors it. Add
+   .light-toggle when placing it directly on a light card background
+   (batch/compare/about pages) rather than inside the dark .viewer panel. */
+.model-toggle button.active { background: var(--structural); color: #fff; }
+.model-toggle.light-toggle { background: var(--structural-soft); }
+.model-toggle.light-toggle button { color: var(--ink-soft); }
+
 .viewer-stage {
   flex: 1;
   display: flex;
