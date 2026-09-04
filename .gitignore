@@ -21,6 +21,8 @@ runs/detect/dental_caries_demo_m_3class_hires_1280/*
 # beyond this local demo (no stated license, real patient data — see CLAUDE.md)
 data/*
 !data/.gitkeep
+data_seg/*
+!data_seg/.gitkeep
 downloads/
 data_for_colab.zip
 demo_examples/

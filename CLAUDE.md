@@ -85,6 +85,18 @@ scripts/tiled_inference.py   — SAHI-style tiled inference experiment.
                                resize) and made results worse, not better.
                                Would need tile-aware retraining to pay off.
                                Not used by the app.
+scripts/prepare_dentex_segmentation.py — converts DENTEX's polygon
+                               `segmentation` annotations (DENTEX is the
+                               only merged source that has them — Kaggle
+                               and CariesXrays are bbox-only) into
+                               data_seg/ (YOLOv8-seg format), same
+                               class drop/remap as drop_class.py so ids
+                               match data/data.yaml.
+train_seg.py                  — YOLOv8m-seg fine-tuning script, mirrors
+                               train.py. Expects data_seg/data.yaml.
+                               Not integrated into the demo app yet —
+                               training pipeline only, by design (see
+                               "Segmentation model" below).
 app/main.py                  — FastAPI backend: /predict, /predict-batch,
                                /api/compare-examples (random 10-image
                                sample each call, IoU-matched against
@@ -142,6 +154,32 @@ which measurably blurs the Caries/Deep Caries boundary. Both match
 findings independently reported in the published literature for this
 task, not just this project's own data (see literature review artifact
 from the 2026-08-28 session if picking this back up).
+
+## Segmentation model
+
+**Trained model:** `runs/segment/dental_caries_seg_m_3class_1280/weights/best.pt`
+— yolov8m-seg, imgsz=1280, same 3 classes, trained on `data_seg/`
+(705 images, 3,371 instances — DENTEX only, early-stopped at epoch 63,
+best at epoch 43). Overall box mAP50 0.683, mask mAP50 0.687.
+Per-class mask mAP50: Impacted 0.927, Caries 0.551, Deep Caries 0.583.
+
+`data_seg/` is a separate, much smaller dataset from `data/` (the
+detection dataset) — DENTEX is the only one of the three merged sources
+with polygon segmentation masks, so this model didn't get the Kaggle or
+CariesXrays instances at all. Not a strict apples-to-apples comparison
+against the detection model's numbers above (different val split,
+box vs. mask IoU) — but the direction is notable: Impacted and Caries
+both scored *higher* here than in the detection model, despite far
+fewer instances (89 vs. 604, and 296 vs. 16,503 respectively) — a
+single consistently-labeled source outperforming a much larger merged
+one, exactly as the literature review's meta-analysis predicted. Deep
+Caries scored lower (583 vs. 616), most likely because 103 val
+instances is thin even for an easier class. Read this as a supporting
+signal, not a validated result — the dataset is small.
+
+**Deliberately not done yet:** wiring this model into the demo app
+(mask overlays in `app/main.py`/the UI). This was scoped as a training
+pipeline only; app integration is a clear, separate follow-up.
 
 ## Immediate next steps
 
